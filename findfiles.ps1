@@ -1,23 +1,25 @@
 #Written by DPEH
 #Powershell Malware Scanner
-#Version 0.2
+#Version 0.4
 
-$obj_defender = Get-MpComputerStatus
-Write-Host "Defender [Enabled] " + $obj_defender.AntiVirusEnabled
-Write-Host "Defender [Last Full Scan] " + $obj_defender.FullScanEndTime + " (Days old"+ $obj_defender.FullScanAge +")"
-Write-Host "Defender [Current Signature Version] " + $obj_defender.AntivirusSignatureVersion + " (Days old "+ $obj_defender.AntivirusSignatureAge +" )"
-if ($obj_defender.FullScanAge > 0)
+clear
+$customscanpath = "C:\Users\"
+$customscanpath = "C:\Windows\temp\"
+$customscanpath = "C:\Users\DavidHazelden\"
+$customscanpath = "C:\Users\Public\"
+$customscanpath = "C:\Users\Windows\"
+
+$customscanpath = "C:\Users\DavidHazelden\Desktop"
+$daysX = 4
+$apimaxcalls = 5
+if(Test-Path ".\vtotalapi.txt" -PathType Leaf)
 {
-    Write-Host "Updating Signatures"
-    #update defender signature
-    Update-MpSignature -verbose
-    Write-Host "Defender [Current Signature Version] " + $obj_defender.AntivirusSignatureVersion + " (Days old "+ $obj_defender.AntivirusSignatureAge +" )"   
+    $vtotal_apikey = Get-Content -Path ".\vtotalapi.txt"
 }
-
-#quick scan
-#Start-MpScan -ScanType QuickScan
-#full scan
-#Start-MpScan -ScanType FullScan
+else
+{
+    $vtotal_apikey = "4e3cfb44278a31332fac0f7e9889c4d5f41e8643139fdaaf73850279a24e515c"
+}
 
 $FileList = Get-Content -Path ".\findfiles.txt"
 $ArrayFullPathFileFound = New-Object System.Collections.ArrayList
@@ -55,16 +57,39 @@ foreach($filelocation in $FileList) {
 }
 
 #live code
-#$ArrayfullfileList = Get-ChildItem -Path 'C:\Users\' -File -Filter * -Recurse -ErrorAction SilentlyContinue -Force -Verbose | Where-Object { Write-Progress "Filename - $($_.Fullname)"; $true }
+#$ArrayfullfileList = Get-ChildItem -Path $customscanpath -File -Filter * -Recurse -ErrorAction SilentlyContinue -Force -Verbose | Where-Object { Write-Progress "Filename - $($_.Fullname)"; $true }
 #$ArrayfullfileList | Export-Csv -Path "C:\temp\$filenamedate-FILEINVENTORY-USERS.csv" -NoTypeInformation
 
+#4 days of changes
+#Get-ChildItem -Path . -Recurse| ? {$_.LastWriteTime -gt (Get-Date).AddDays(-4)}
+Write-Host "Scanning files changed in last 4 days passing to array!!"
+$ArrayfullfileList = Get-ChildItem -Path $customscanpath -File -Filter * -Recurse -ErrorAction SilentlyContinue -Force -Verbose | Where-Object {
+    Write-Progress "Scanning $($_.Fullname) __ Accessed $($_.LastWriteTime)";
+    if ($($_.LastWriteTime) -gt (Get-Date).AddDays(-$daysX))
+    {
+        #Write-Progress "Filename - $($_.Fullname)"; $true
+        $true;
+        Start-Sleep -s 1
+        Write-Warning "$($_.Fullname) Modified last 4 days! ADDED TO CHECK LIST!"
+    }
+    else
+    {
+        #older than 4
+        #Write-Host "FALSE - File is older than 4 days!"; $false
+    }
+    
+}
+Write-Progress -Completed -Activity "Clearing Progress Box Message" #hacks found by luck
+
 #debug
-$ArrayfullfileList = Get-ChildItem -Path 'C:\Users\Public\Desktop\SCREENSHOTS\SETUP LAPTOP' -File -Filter * -Recurse -ErrorAction SilentlyContinue -Force -Verbose | Where-Object { Write-Progress "Filename - $($_.Fullname)"; $true }
+#Write-Host "Scanning directory for list of files and passing to array!!"
+#$ArrayfullfileList = Get-ChildItem -Path $customscanpath -File -Filter * -Recurse -ErrorAction SilentlyContinue -Force -Verbose | Where-Object { Write-Progress "Filename - $($_.Fullname)"; $true }
 
+Write-Host "Saving directory files to temp as evidence!"
 #debug test
-$ArrayfullfileList | Export-Csv -Path "C:\temp\20221125T150513Z-FILEINVENTORY-USERS.csv" -NoTypeInformation
+$ArrayfullfileList | Export-Csv -Path "C:\temp\4days-20221125T150513Z-FILEINVENTORY-USERS.csv" -NoTypeInformation
 
-
+$apicount = 0
 
 foreach($hashfilescan in $ArrayfullfileList) {
     #debug#$getfilehash = Get-FileHash C:\temp\20221125T150513Z-FILEINVENTORY-USERS.csv -Algorithm SHA256
@@ -81,7 +106,7 @@ foreach($hashfilescan in $ArrayfullfileList) {
     #https://www.virustotal.com/ui/files/654D82796414D54C285219A71849CB8A39301363363AB72045C4ADD9585352F2"
     
     #$strhash256 = "654D82796414D54C285219A71849CB8A39301363363AB72045C4ADD9585352F2" #not exist
-    $strhash256 = "2f6bba2bf111a1d7462aee41511f6fb2ebaaff4468171c537b6f7c5b7bab702f" #exists
+    #$strhash256 = "2f6bba2bf111a1d7462aee41511f6fb2ebaaff4468171c537b6f7c5b7bab702f" #exists
 
     $RestMethod = @{}
     $RestMethod = @{
@@ -96,27 +121,42 @@ foreach($hashfilescan in $ArrayfullfileList) {
 
         Headers = @{
             "Accept"   = "application/json"
-            'X-Apikey' = "4e3cfb44278a31332fac0f7e9889c4d5f41e8643139fdaaf73850279a24e515c"
+            'X-Apikey' = $vtotal_apikey
         }
     }    
 
     Try {
-        #$InvokeApiOutput = Invoke-RestMethod @RestMethod -OutFile "C:\temp\test1.txt" -ErrorAction Stop
-        $InvokeApiOutput = Invoke-RestMethod @RestMethod -ErrorAction Stop
-        #Write-Host $InvokeApiOutput.GetType()
-        #KEEP $InvokeApiOutput.data.attributes | Get-Member #remember this one!
 
-        $check1_sha256 = $InvokeApiOutput.data.attributes.sha256
-
-        if($check1_sha256 -eq $strhash256)
+        if ($apicount -le $apimaxcalls)
         {
-            $vtotal_outcome = "WARNING! We have a Sha 256 match! FILENAME = "+ $hashfilelocation
-            Write-Warning $vtotal_outcome
-            $ArrayVirusTotalMatches.Add($vtotal_outcome)
+
+            #$InvokeApiOutput = Invoke-RestMethod @RestMethod -OutFile "C:\temp\test1.txt" -ErrorAction Stop
+            $InvokeApiOutput = Invoke-RestMethod @RestMethod -ErrorAction Stop
+            #Write-Host $InvokeApiOutput.GetType()
+            #KEEP $InvokeApiOutput.data.attributes | Get-Member #remember this one!
+
+            $check1_sha256 = $InvokeApiOutput.data.attributes.sha256
+
+            Write-Host "SHA2 value from VTOTAL ="+ $check1_sha256
+            Write-Host "SHA2 value from FILE ="+ $strhash256
+
+            if($check1_sha256 -eq $strhash256)
+            {
+                $vtotal_outcome = "WARNING! We have a Sha 256 match! FILENAME = "+ $hashfilelocation
+                Write-Warning $vtotal_outcome
+                $ArrayVirusTotalMatches.Add($vtotal_outcome)
+            }
+            else {
+                <# Action when all if and elseif conditions are false #>
+                Write-host "GOOD! File Not Found! No Data Response Returned"
+            }
+            $apicount++
+            Write-Host $apicount
+
         }
         else {
-            <# Action when all if and elseif conditions are false #>
-            Write-host "GOOD! File Not File! No Data Response Returned"
+            
+            Write-Warning "Too many API calls, more than 50+!"
         }
 
     } catch {
@@ -136,7 +176,13 @@ Write-Host "Saving Hashes to File now...will take a moment...!"
 Write-Output $ArrayofHashes | Out-File -FilePath "C:\temp\$filenamedate-USERS-FILESHASHED.txt"
 
 Write-Host "Saving Virus Total Matches to File"
-$ArrayVirusTotalMatches | Out-File -FilePath "C:\temp\$filenamedate-USERS-VTOTALMATCHES.txt"
+if($ArrayVirusTotalMatches.Count > 0)
+{
+    $ArrayVirusTotalMatches | Out-File -FilePath "C:\temp\$filenamedate-VTOTAL-SHA256-SCAN___WARNING___MATCHESFOUND.txt"
+}
+else {
+    "No Matches Found on Virus Total, Good news!" | Out-File -FilePath "C:\temp\$filenamedate-VTOTAL-SHA256-SCAN___CLEAN.txt"
+}
 
 
 #TESTS RESULTS
@@ -150,43 +196,26 @@ if(($ArrayFullPathFileFound | Measure-Object -Maximum).Maximum -gt 0){
     Write-Output "CLEAN - Nothing Found!" | Out-File -FilePath "C:\temp\$filenamedate-CLEAN-scan-custom.txt"
 }
 
+$obj_defender = Get-MpComputerStatus
+Write-Host "Defender [Enabled] " + $obj_defender.AntiVirusEnabled
+Write-Host "Defender [Last Full Scan] " + $obj_defender.FullScanEndTime + " (Days old"+ $obj_defender.FullScanAge +")"
+Write-Host "Defender [Current Signature Version] " + $obj_defender.AntivirusSignatureVersion + " (Days old "+ $obj_defender.AntivirusSignatureAge +" )"
+if ($obj_defender.FullScanAge > 0)
+{
+    Write-Host "Updating Signatures"
+    #update defender signature
+    Update-MpSignature -verbose
+    Write-Host "Defender [Current Signature Version] " + $obj_defender.AntivirusSignatureVersion + " (Days old "+ $obj_defender.AntivirusSignatureAge +" )"   
+}
 
-#old stuff
-#$Token = "123h1v23yt2egv1e1e1b2ei1ube2iu12be" | ConvertTo-SecureString -AsPlainText -Force
-#[System.Reflection.Assembly]::LoadWithPartialName("System.Web.Extensions") | Out-Null
-#$Serialize = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-#$Response = $Serialize.DeserializeObject($InvokeApiOutput.data[0])
+#quick scan
+#Start-MpScan -ScanType QuickScan
+#full scan
+#Start-MpScan -ScanType FullScan
 
-#Write-Host $Response | Format-Table
+#Add-MpPreference -ExclusionPath "C:\Temp"
+#Add-MpPreference -EnableFileHashComputation
+#Add-MpPreference -ExclusionExtension "jpg"
 
-    # If hash not found on Virus Total
-#if ($Response.verbose_msg -Like '*not among*')
-#{
-#    echo "[+] File hash not known by Virus Total!"
-#}
-#if ($resultfullfilepath -eq $True)
-#{
-#    $ArrayFullPathFileFound.Add($justfilename)
-#    #Write-Host $outcome
-#}
-#else {
-#    #Write-Host $outcome
-#}
-
-#only works on windows unique
-
-#$ArrayJustFileNames | Sort-Object -Property @{Expression={$_.Trim()}} -Unique | ForEach-Object {
-#    Write-Host $_
-#    if ($ArrayfullfileList -contains $_) {
-#        Write-Host "`$array2 contains the `$array1 string [$_]"
-#    }
-#}
-
-#$InvokeApiOutput.data
-#Write-Host $InvokeApiOutput.GetType()
-#Write-Host $InvokeApiOutput[0].GetType()
-##$testoutput = ConvertFrom-JSON $InvokeApiOutput[0].Data #no need to convert it's a rest call dave...
-#$testoutput = $InvokeApiOutput[0]
-#$testoutput | Get-Member
-#$testoutput.Equals[0] | Get-Member
-#Write-Host $testoutput.Equals.Value.ToString()
+#can also scan with defender to finish, this works when you have another AV product as well.
+#Start-MpScan -ScanType CustomScan -ScanPath $customscanpath

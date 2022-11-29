@@ -163,7 +163,7 @@ if($recentfilecount -gt 0)
         if ($fileexiststohash -eq $True)
         {
             Write-Progress -Activity "Computing SHA256 Hash $hashfilescan" -Status "$h of $recentfilecount"
-            Write-Host "Computing SHA256 Hash $hashfilescan - $h of $recentfilecount"
+            #Write-Host "Computing SHA256 Hash $hashfilescan - $h of $recentfilecount"
             $getfilehash = Get-FileHash $hashfilelocation -Algorithm SHA256
             $strhash256 = $getfilehash.Hash
             $ArrayofHashes.Add($strhash256) > $null
@@ -179,36 +179,33 @@ else {
 
 $c1 = $txtfile_scan_for_hashes_custom_list.Count
 $c2 = $ArrayofHashes.Count
-$actionsacount = ($c1 + $c2)
-#Write-Host "Total Actions $actionsacount"
+$actions_count = ($c1 * $c2)
+Write-Host "Total Actions $actions_count"
 
 Write-Host "Custom DIR Hashes of Files - Saved to Array!"
 Write-Host "Saving Hashes to CSV File now...will take a moment...!"
 $saveto = ($evidenceoutput + "$filenamedate-customdir-recentfiles-hashed.txt")
 Write-Output $ArrayofHashes | Out-File -FilePath $saveto
 
-
-$h1 = 1
+#$i = 1
+#not needed, maybe not yet.
+$h = 1
 if ($bool_scan_for_hashes_custom -eq $true)
 {     
-
+    Write-Host "##### CUSTOMDIR FILE HASH SCAN - START" -BackgroundColor DarkGreen
     foreach($txthash_compare256 in $txtfile_scan_for_hashes_custom_list){
-
         foreach ($256hashed in $ArrayofHashes)
         {
-            Write-Progress -Activity "Checking SHA256 Hash $256hashed" -Status "$h of $actionscount"
-            Write-Progress -Activity "Comparing $txthash_compare256 against $256hashed"
+            Write-Progress -Activity "Comparing $txthash_compare256 against $256hashed" -Status "$h of $actions_count"
             if ($txthash_compare256 -eq $256hashed)
             {
                 Write-Warning "Bad Hash Found!!!!!! $txthash_compare256"
                 $array_hashbad_found.Add($txthash_compare256) > $null
             }
-            #Sleep -Milliseconds 1000
-            $h1++
-        
-            
+            #Sleep -Milliseconds 250
+            $h++
         }
-
+        #$i++
     }
 }
 
@@ -258,24 +255,24 @@ if ($bool_vtotalscan = $true)
                     $check1_sha256 = $InvokeApiOutput.data.attributes.sha256
                     if($check1_sha256.Length -eq 0)
                     {
-                        Write-Host "SHA2 value from VTOTAL = BLANK"
+                        Write-Host "API($apicount) | SHA2 value from VTOTAL = BLANK | Searched for $256hashedbravo"
                     }
                     else
                     {
-                        Write-Host "SHA2 value from VTOTAL ="+ $check1_sha256
+                        Write-Host "API($apicount) | SHA2 value from VTOTAL ="+ $check1_sha256 -BackgroundColor DarkRed
                     }
         
-                    Write-Host "SHA2 value from FILE ="+ $256hashedbravo
+                    #Write-Host "SHA2 value from FILE ="+ $256hashedbravo
         
                     if($check1_sha256 -eq $256hashedbravo)
                     {
-                        $vtotal_outcome = "WARNING! We have a Sha 256 match! FILENAME = "+ $256hashedbravo.Fullname
-                        Write-Warning $vtotal_outcome
+                        $vtotal_outcome = "WARNING! MATCHED FILENAME = "+ $256hashedbravo.Fullname
+                        Write-Warning $vtotal_outcome -BackgroundColor DarkRed
                         $ArrayVirusTotalMatches.Add($vtotal_outcome)
                     }
                     else {
                         <# Action when all if and elseif conditions are false #>
-                        Write-host "GOOD! File Not Found! No Data Response Returned"
+                        #Write-host "GOOD! File Not Found! No Data Response Returned"
                     }
                     $apicount++
         
@@ -303,6 +300,7 @@ if ($bool_vtotalscan = $true)
 
 }
 
+Write-Host "##### EXPORTING RESULTS TO TXT/CSV!" -BackgroundColor DarkGreen
 
 if($ArrayVirusTotalMatches.Count > 0)
 {
@@ -329,6 +327,8 @@ if(($ArrayEXACTPathFileFound | Measure-Object -Maximum).Maximum -gt 0){
     Write-Output "CLEAN - Nothing Found!" | Out-File -FilePath $saveto
 }
 
+
+Write-Host "##### STARTING WINDOWS DEFENDER SCAN" -BackgroundColor DarkGreen
 
 #####work in progress windows defender scans
 

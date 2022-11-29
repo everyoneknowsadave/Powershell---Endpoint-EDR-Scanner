@@ -42,7 +42,7 @@ if(Test-Path ".\vtotalapi.txt" -PathType Leaf)
 }
 else
 {
-    #$vtotal_apikey = "4e3cfb44278a31332fac0f7e9889c4d5f41e8643139fdaaf73850279a24e515c"
+    #$vtotal_apikey = ""
     $bool_vtotalscan = $false
 }
 
